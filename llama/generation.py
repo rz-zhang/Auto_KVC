@@ -6,6 +6,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from dataclasses import field
 from typing import List, Optional, Tuple, TypedDict
 
 import torch
@@ -41,6 +42,10 @@ class Llama:
         max_batch_size: int,
         model_parallel_size: Optional[int] = None,
         seed: int = 1,
+        adaptive: bool = False,
+        dim_compress=1024,
+        kv_compress_layers: List[int] = field(default_factory=list),
+        custom_kvc_config: Optional[List[int]] = None,
     ) -> "Llama":
         """
         Build a Llama instance by initializing and loading a model checkpoint.
@@ -94,6 +99,8 @@ class Llama:
         model_args: ModelArgs = ModelArgs(
             max_seq_len=max_seq_len,
             max_batch_size=max_batch_size,
+            dim_compress=dim_compress,
+            kv_compress_layers=kv_compress_layers,
             **params,
         )
         tokenizer = Tokenizer(model_path=tokenizer_path)
@@ -102,9 +109,10 @@ class Llama:
             torch.set_default_tensor_type(torch.cuda.BFloat16Tensor)
         else:
             torch.set_default_tensor_type(torch.cuda.HalfTensor)
-        model = Transformer(model_args)
+        model = Transformer(model_args, custom_kvc_config)
         model.load_state_dict(checkpoint, strict=False)
         print(f"Loaded in {time.time() - start_time:.2f} seconds")
+        model.layerwise_svd(adaptive=adaptive)
 
         return Llama(model, tokenizer)
 
@@ -143,8 +151,11 @@ class Llama:
 
         """
         params = self.model.params
+        # # Filter out prompts that are too long
+        # prompt_tokens = [prompt for prompt in prompt_tokens if len(prompt) <= params.max_seq_len]
         bsz = len(prompt_tokens)
         assert bsz <= params.max_batch_size, (bsz, params.max_batch_size)
+        prompt_tokens = truncate_prompts(prompt_tokens, params.max_seq_len)
 
         min_prompt_len = min(len(t) for t in prompt_tokens)
         max_prompt_len = max(len(t) for t in prompt_tokens)
@@ -335,6 +346,9 @@ class Llama:
             for t in generation_tokens
         ]
 
+    def get_model_stats(self):
+        return self.model.get_model_stats()
+
 
 def sample_top_p(probs, p):
     """
@@ -359,3 +373,6 @@ def sample_top_p(probs, p):
     next_token = torch.multinomial(probs_sort, num_samples=1)
     next_token = torch.gather(probs_idx, -1, next_token)
     return next_token
+
+def truncate_prompts(prompt_tokens: List[List[int]], max_length: int) -> List[List[int]]:
+    return [prompt[:max_length] for prompt in prompt_tokens]

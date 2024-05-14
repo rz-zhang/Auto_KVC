@@ -1,7 +1,7 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # This software may be used and distributed in accordance with the terms of the Llama 3 Community License Agreement.
 
-from typing import List
+from typing import List, Optional
 
 import fire
 
@@ -16,6 +16,8 @@ def main(
     max_seq_len: int = 128,
     max_gen_len: int = 64,
     max_batch_size: int = 4,
+    dim_compress: int = 2048,
+    kv_compress_layers: Optional[List[int]] = None,
 ):
     """
     Examples to run with the pre-trained models (no fine-tuning). Prompts are
@@ -29,6 +31,8 @@ def main(
         tokenizer_path=tokenizer_path,
         max_seq_len=max_seq_len,
         max_batch_size=max_batch_size,
+        dim_compress=dim_compress,
+        kv_compress_layers=[],
     )
 
     prompts: List[str] = [

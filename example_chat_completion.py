@@ -16,6 +16,8 @@ def main(
     max_seq_len: int = 512,
     max_batch_size: int = 4,
     max_gen_len: Optional[int] = None,
+    dim_compress: Optional[int] = 512,
+    adaptive: bool = True,
 ):
     """
     Examples to run with the models finetuned for chat. Prompts correspond of chat
@@ -33,6 +35,9 @@ def main(
         tokenizer_path=tokenizer_path,
         max_seq_len=max_seq_len,
         max_batch_size=max_batch_size,
+        dim_compress=dim_compress,
+        kv_compress_layers=list(range(32)),
+        adaptive=adaptive,
     )
 
     dialogs: List[Dialog] = [
