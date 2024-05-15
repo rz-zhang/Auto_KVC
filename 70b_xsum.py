@@ -2,7 +2,7 @@
 torchrun --nproc_per_node 8 70b_xsum.py \
 --ckpt_dir Meta-Llama-3-70B-Instruct/ \
 --tokenizer_path Meta-Llama-3-70B-Instruct/tokenizer.model \
---max_seq_len 2048 --max_batch_size 10 --max_gen_len 256
+--max_seq_len 2048 --max_batch_size 20 --max_gen_len 256
 '''
 
 from typing import List, Optional
@@ -98,6 +98,10 @@ def main(
         )
         for result in results:
             predictions.append(result['generation'].strip())
+
+        if predictions:
+            accumulated_rouge_scores = calculate_rouge_scores(predictions, reference_summaries[:len(predictions)])
+            print(f"Accumulated ROUGE scores after {len(predictions)} prompts: {accumulated_rouge_scores}")
 
     # 计算ROUGE得分
     rouge_scores = calculate_rouge_scores(predictions, reference_summaries)
