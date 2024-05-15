@@ -38,6 +38,18 @@ KVC_CONFIG_2 = [
     192, 192, 192, 192, 192, 192, 192, 192,
 ]
 
+SECOND_HALF_LAYERS = list(range(16, 32))
+LAST_LAYERS = list(range(20, 32))
+BASELINE = []
+
+KVC_CONFIG_DICT = {
+    'kvc_1': KVC_CONFIG_1,
+    'kvc_2': KVC_CONFIG_2,
+    'second_half': SECOND_HALF_LAYERS,
+    'last_layers': LAST_LAYERS,
+    'baseline': BASELINE,
+}
+
 DATA_SLICE = None
 
 def create_prompts_from_data(data):
@@ -90,11 +102,9 @@ def main(
     max_gen_len: int = 64,
     max_batch_size: int = 10,
     dim_compress: int = 1024,
-    kv_compress_layers: int = 0,
-    adaptive: bool = False,
+    kvc_config: str = 'baseline',
 ):
-    kv_compress_layers = list(range(8,32))
-    # kv_compress_layers = AVE_DIM_256_384_512_LAYER_RANK[:16]
+    kv_compress_layers = KVC_CONFIG_DICT[kvc_config]
     generator = Llama.build(
         ckpt_dir=ckpt_dir,
         tokenizer_path=tokenizer_path,
@@ -102,7 +112,6 @@ def main(
         max_batch_size=max_batch_size,
         dim_compress=dim_compress,
         kv_compress_layers=kv_compress_layers,
-        adaptive=adaptive,
         custom_kvc_config=KVC_CONFIG_2,
     )
 
@@ -173,12 +182,10 @@ def main(
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M")
 
-    if adaptive:
-        filename = f"/localscratch/rongzhi/kvcache/llama3/eval/obqa_adaptive_{timestamp}.json"
-    else:
-        filename = f"/localscratch/rongzhi/kvcache/llama3/eval/obqa_layer_{kv_compress_layers_str}_dim_{dim_compress}_{timestamp}.json"
+    filename = f"/localscratch/rongzhi/kvcache/llama3/eval/obqa_layer_{kv_compress_layers_str}_dim_{dim_compress}_{timestamp}.json"
     filename = f"/localscratch/rongzhi/kvcache/llama3/eval/obqa/ave_dim_256_384_512_top16_layer_{kv_compress_layers_str}_dim_{dim_compress}_{timestamp}.json"
     filename = f"/localscratch/rongzhi/kvcache/llama3/eval/obqa/custom_config_test_{timestamp}.json"
+    filename = f"/localscratch/rongzhi/kvcache/llama3/eval/obqa/{kvc_config}_layer_{kv_compress_layers_str}_dim_{dim_compress}_{timestamp}.json"
     with open(filename, 'w') as file:
         json.dump(results, file, indent=4)
 
