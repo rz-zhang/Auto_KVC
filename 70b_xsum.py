@@ -2,12 +2,13 @@
 torchrun --nproc_per_node 8 70b_xsum.py \
 --ckpt_dir Meta-Llama-3-70B-Instruct/ \
 --tokenizer_path Meta-Llama-3-70B-Instruct/tokenizer.model \
---max_seq_len 2048 --max_batch_size 20 --max_gen_len 256
+--max_seq_len 2048 --max_batch_size  --max_gen_len 256
 '''
 
 from typing import List, Optional
 
 import fire
+import os
 from datasets import load_dataset
 import re
 from tqdm import tqdm
@@ -133,6 +134,11 @@ def main(
     #filename = f"/localscratch/rongzhi/kvcache/llama3/eval/xsum/test1k/custom_layers_rouge1_top16_{kv_compress_layers_str}_dim_{dim_compress}_{timestamp}.json"
     # filename = f"/localscratch/rongzhi/kvcache/llama3/eval/xsum/test1k/ave_dim_128_256_384_512_rouge1_top16_{kv_compress_layers_str}_dim_{dim_compress}_{timestamp}.json"
     filename = f"./eval/xsum/test1k/{kvc_config}_layer_{kv_compress_layers_str}_dim_{dim_compress}_{timestamp}.json"
+
+    # Check if the directory exists, and if not, create it
+    directory = os.path.dirname(filename)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
     # filename = f"baseline_1k_test.json"
     with open(filename, 'w') as file:
         json.dump(results, file, indent=4)
