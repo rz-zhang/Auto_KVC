@@ -154,6 +154,7 @@ def cupy_decompose_matrix(matrix, target_dim):
 def numpy_decompose_matrix(matrix, target_dim):
     # Assuming matrix is a PyTorch tensor on a GPU, move it to CPU and convert to a NumPy array.
     matrix_np = matrix.float().cpu().numpy()
+    print('Matrix Shape:', matrix_np.shape)
 
     # Perform SVD using NumPy.
     U_np, S_np, V_np = np.linalg.svd(matrix_np, full_matrices=True)
