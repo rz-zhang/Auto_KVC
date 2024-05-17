@@ -2,7 +2,7 @@
 torchrun --nproc_per_node 8 70b_obqa.py \
     --ckpt_dir Meta-Llama-3-70B-Instruct/ \
     --tokenizer_path Meta-Llama-3-70B-Instruct/tokenizer.model \
-    --max_seq_len 1024 --max_batch_size 10
+    --max_seq_len 1024 --max_batch_size 10 --dim_compress 512 --kvc_config all_layers
 '''
 
 from typing import List, Optional
@@ -187,7 +187,7 @@ def main(
     filename = f"/localscratch/rongzhi/kvcache/llama3/eval/obqa_layer_{kv_compress_layers_str}_dim_{dim_compress}_{timestamp}.json"
     filename = f"/localscratch/rongzhi/kvcache/llama3/eval/obqa/ave_dim_256_384_512_top16_layer_{kv_compress_layers_str}_dim_{dim_compress}_{timestamp}.json"
     filename = f"/localscratch/rongzhi/kvcache/llama3/eval/obqa/custom_config_test_{timestamp}.json"
-    filename = f"./eval/obqa/{kvc_config}_layer_{kv_compress_layers_str}_dim_{dim_compress}_{timestamp}.json"
+    filename = f"./eval/obqa/{kvc_config}_dim_{dim_compress}_{timestamp}.json"
     # Check if the directory exists, and if not, create it
     directory = os.path.dirname(filename)
     if not os.path.exists(directory):
