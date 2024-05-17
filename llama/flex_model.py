@@ -151,6 +151,35 @@ def cupy_decompose_matrix(matrix, target_dim):
     # Return the reduced U, diagonal S, and transposed V to match the original format.
     return U_reduced.type(matrix.dtype), S_reduced_diag.type(matrix.dtype), V_reduced.type(matrix.dtype)
 
+def numpy_decompose_matrix(matrix, target_dim):
+    # Assuming matrix is a PyTorch tensor on a GPU, move it to CPU and convert to a NumPy array.
+    matrix_np = matrix.cpu().numpy()
+
+    # Perform SVD using NumPy.
+    U_np, S_np, V_np = np.linalg.svd(matrix_np, full_matrices=True)
+
+    # Reduce the dimensions of U, S, and V matrices as per target_dim.
+    U_reduced_np = U_np[:, :target_dim]
+    S_reduced_np = S_np[:target_dim]
+    V_reduced_np = V_np[:target_dim, :]
+
+    # Convert the reduced matrices back to PyTorch tensors.
+    U_reduced = torch.tensor(U_reduced_np, dtype=matrix.dtype).to(matrix.device)
+    S_reduced = torch.tensor(S_reduced_np, dtype=matrix.dtype).to(matrix.device)
+    V_reduced = torch.tensor(V_reduced_np, dtype=matrix.dtype).to(matrix.device)
+
+    # Construct the diagonal matrix from S in PyTorch.
+    S_reduced_diag = torch.diag(S_reduced)
+
+    # Calcuate the reconstruction error
+    matrix_reconstructed = torch.mm(torch.mm(U_reduced, S_reduced_diag), V_reduced)
+    error = torch.norm(matrix - matrix_reconstructed, p='fro')
+    print("Frobenius norm of the reconstruction error:", error)
+    relative_error = error / torch.norm(matrix, p='fro')
+    print("Relative reconstruction error:", relative_error)
+
+    return U_reduced, S_reduced_diag, V_reduced
+
 
 def adaptive_svd(matrix, error_threshold=0.3):
     # Assuming matrix is a PyTorch tensor on a GPU, convert it to a CuPy array
@@ -355,10 +384,10 @@ class Attention(nn.Module):
             print('---------Decompose Start----------')
             # wk.weight.data -> (dim, n_heads * head_dim)
             print('wk weight data shape:', self.wk.weight.data.shape)
-            self.wk_U, wk_S, wk_V = cupy_decompose_matrix(self.wk.weight.data, target_dim=self.dim_compress)
+            self.wk_U, wk_S, wk_V = numpy_decompose_matrix(self.wk.weight.data, target_dim=self.dim_compress)
             # wk_U (n_heads * head_dim, dim_compress), wk_S (dim_compress, dim_compress)
             # wk_V (n_heads * head_dim, dim_compress), we need to transpose it manually
-            self.wv_U, wv_S, wv_V = cupy_decompose_matrix(self.wv.weight.data, target_dim=self.dim_compress)
+            self.wv_U, wv_S, wv_V = numpy_decompose_matrix(self.wv.weight.data, target_dim=self.dim_compress)
             # Precompute (UΣ) for updating the query matrix.
             # self.wk_A = torch.mm(self.wk_U, self.wk_S)  # Matrix A = (UΣ)_{n_heads * head_dim, dim_compress}
             # self.wv_B = torch.mm(self.wv_U, self.wv_S)  # Matrix B = (UΣ)_{n_heads * head_dim, dim_compress}
