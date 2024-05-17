@@ -160,7 +160,7 @@ cython_debug/
 #.idea/
 
 # model files
-/localscratch/rongzhi/kvcache/llama3/Meta-Llama-3-8B-Instruct/
+/Meta-Llama-3-8B-Instruct/
 
 # results
-/localscratch/rongzhi/kvcache/llama3/eval/
+/eval/

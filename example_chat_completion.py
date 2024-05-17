@@ -7,6 +7,9 @@ import fire
 
 from llama import Dialog, Llama
 
+SECOND_HALF_LAYERS = list(range(16, 32))
+LAST_LAYERS = list(range(20, 32))
+BASELINE = []
 
 def main(
     ckpt_dir: str,
@@ -17,7 +20,7 @@ def main(
     max_batch_size: int = 4,
     max_gen_len: Optional[int] = None,
     dim_compress: Optional[int] = 512,
-    adaptive: bool = True,
+    adaptive: bool = False,
 ):
     """
     Examples to run with the models finetuned for chat. Prompts correspond of chat
@@ -36,7 +39,7 @@ def main(
         max_seq_len=max_seq_len,
         max_batch_size=max_batch_size,
         dim_compress=dim_compress,
-        kv_compress_layers=list(range(32)),
+        kv_compress_layers=BASELINE,
         adaptive=adaptive,
     )
 

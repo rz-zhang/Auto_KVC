@@ -8,6 +8,7 @@ CUDA_VISIBLE_DEVICES=2 torchrun --nproc_per_node 1 --master_port 25688 example_o
 from typing import List, Optional
 
 import fire
+import os
 from datasets import load_dataset
 import re
 from tqdm import tqdm
@@ -16,8 +17,9 @@ import datetime
 
 from llama import Dialog, Llama
 
-LAYER_MAPPING = {i: [i] for i in range(32)}
-# kv_compress_layers=LAYER_MAPPING.get(kv_compress_layers, [])
+SECOND_HALF_LAYERS = list(range(16, 32))
+LAST_LAYERS = list(range(20, 32))
+BASELINE = []
 
 def create_prompts_from_data(data):
     prompts = []
@@ -72,14 +74,14 @@ def main(
     kv_compress_layers: int = 0,
     adaptive: bool = False,
 ):
-    # kv_compress_layers = list(range(8,31,3))
+    kv_compress_layers = SECOND_HALF_LAYERS
     generator = Llama.build(
         ckpt_dir=ckpt_dir,
         tokenizer_path=tokenizer_path,
         max_seq_len=max_seq_len,
         max_batch_size=max_batch_size,
         dim_compress=dim_compress,
-        kv_compress_layers=LAYER_MAPPING.get(kv_compress_layers, []),
+        kv_compress_layers=kv_compress_layers,
         adaptive=adaptive,
     )
 
@@ -151,7 +153,12 @@ def main(
         filename = f"/localscratch/rongzhi/kvcache/llama3/eval/obqa_adaptive_{timestamp}.json"
     else:
         filename = f"/localscratch/rongzhi/kvcache/llama3/eval/obqa/llama-3-inst-8b-res/layer_{kv_compress_layers_str}_dim_{dim_compress}_{timestamp}.json"
-    # filename = f"/localscratch/rongzhi/kvcache/llama3/eval/layer_{kv_compress_layers_str}_dim_{dim_compress}_{timestamp}.json"
+    filename = f"/localscratch/rongzhi/kvcache/llama3/eval/obqa/llama-3-inst-8b/last_16_layer_{kv_compress_layers_str}_dim_{dim_compress}_task_desc_1_shot_fact_{timestamp}.json"
+    # Check if the directory exists, and if not, create it
+    directory = os.path.dirname(filename)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
     with open(filename, 'w') as file:
         json.dump(results, file, indent=4)
 

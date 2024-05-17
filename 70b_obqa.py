@@ -1,13 +1,14 @@
 '''
-CUDA_VISIBLE_DEVICES=3 torchrun --nproc_per_node 1 --master_port 25614 non_consecutive_kvc_obqa.py \
-    --ckpt_dir Meta-Llama-3-8B-Instruct/ \
-    --tokenizer_path Meta-Llama-3-8B-Instruct/tokenizer.model \
-    --max_seq_len 512 --max_batch_size 10 --dim_compress 512
+torchrun --nproc_per_node 8 70b_obqa.py \
+    --ckpt_dir Meta-Llama-3-70B-Instruct/ \
+    --tokenizer_path Meta-Llama-3-70B-Instruct/tokenizer.model \
+    --max_seq_len 1024 --max_batch_size 10
 '''
 
 from typing import List, Optional
 
 import fire
+import os
 from datasets import load_dataset
 import re
 from tqdm import tqdm
@@ -38,15 +39,17 @@ KVC_CONFIG_2 = [
     192, 192, 192, 192, 192, 192, 192, 192,
 ]
 
-SECOND_HALF_LAYERS = list(range(16, 32))
-LAST_LAYERS = list(range(20, 32))
+SECOND_HALF_LAYERS = list(range(40, 80))
+LAST_20_LAYERS = list(range(60, 80))
+ALL_LAYERS = list(range(80))
 BASELINE = []
 
 KVC_CONFIG_DICT = {
     'kvc_1': KVC_CONFIG_1,
     'kvc_2': KVC_CONFIG_2,
+    'all_layers': ALL_LAYERS,
     'second_half': SECOND_HALF_LAYERS,
-    'last_layers': LAST_LAYERS,
+    'last_20_layers': LAST_20_LAYERS,
     'baseline': BASELINE,
 }
 
@@ -184,7 +187,11 @@ def main(
     filename = f"/localscratch/rongzhi/kvcache/llama3/eval/obqa_layer_{kv_compress_layers_str}_dim_{dim_compress}_{timestamp}.json"
     filename = f"/localscratch/rongzhi/kvcache/llama3/eval/obqa/ave_dim_256_384_512_top16_layer_{kv_compress_layers_str}_dim_{dim_compress}_{timestamp}.json"
     filename = f"/localscratch/rongzhi/kvcache/llama3/eval/obqa/custom_config_test_{timestamp}.json"
-    filename = f"/localscratch/rongzhi/kvcache/llama3/eval/obqa/{kvc_config}_layer_{kv_compress_layers_str}_dim_{dim_compress}_{timestamp}.json"
+    filename = f"./eval/obqa/{kvc_config}_layer_{kv_compress_layers_str}_dim_{dim_compress}_{timestamp}.json"
+    # Check if the directory exists, and if not, create it
+    directory = os.path.dirname(filename)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
     with open(filename, 'w') as file:
         json.dump(results, file, indent=4)
 

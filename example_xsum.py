@@ -1,8 +1,8 @@
 '''
-CUDA_VISIBLE_DEVICES=3 torchrun --nproc_per_node 1 --master_port 25688 example_xsum.py \
+CUDA_VISIBLE_DEVICES=1 torchrun --nproc_per_node 1 --master_port 25688 example_xsum.py \
     --ckpt_dir Meta-Llama-3-8B-Instruct/ \
     --tokenizer_path Meta-Llama-3-8B-Instruct/tokenizer.model \
-    --max_seq_len 2048 --max_batch_size 20 --dim_compress 1024
+    --max_seq_len 2048 --max_batch_size 50 --dim_compress 256 -- max_gen_len 512
 '''
 
 from datasets import load_dataset
@@ -14,6 +14,9 @@ from evaluate import load
 from typing import List, Optional
 
 from llama import Llama
+SECOND_HALF_LAYERS = list(range(16, 32))
+LAST_LAYERS = list(range(20, 32))
+BASELINE = []
 
 def create_prompts_from_data(data):
     prompts = []
@@ -46,12 +49,12 @@ def main(
         max_seq_len=max_seq_len,
         max_batch_size=max_batch_size,
         dim_compress=dim_compress,
-        kv_compress_layers=list(range(32)),
+        kv_compress_layers=BASELINE,
         adaptive=adaptive,
     )
 
     dataset = load_dataset("xsum", split='test')
-    prompts, reference_summaries = create_prompts_from_data(dataset[:100])
+    prompts, reference_summaries = create_prompts_from_data(dataset[:200])
 
     predictions = []
     num_prompts = len(prompts)

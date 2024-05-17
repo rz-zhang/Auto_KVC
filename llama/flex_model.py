@@ -354,23 +354,26 @@ class Attention(nn.Module):
         if not adaptive:
             print('---------Decompose Start----------')
             # wk.weight.data -> (dim, n_heads * head_dim)
-            # sparsity = 1.0 - self.wk.weight.data.nonzero(as_tuple=False).size(0) / self.wk.weight.data.numel()
-            # sparsity = 1.0 - self.wv.weight.data.nonzero(as_tuple=False).size(0) / self.wv.weight.data.numel()
             print('wk weight data shape:', self.wk.weight.data.shape)
             self.wk_U, wk_S, wk_V = cupy_decompose_matrix(self.wk.weight.data, target_dim=self.dim_compress)
             # wk_U (n_heads * head_dim, dim_compress), wk_S (dim_compress, dim_compress)
             # wk_V (n_heads * head_dim, dim_compress), we need to transpose it manually
-            wv_U, wv_S, wv_V = cupy_decompose_matrix(self.wv.weight.data, target_dim=self.dim_compress)
+            self.wv_U, wv_S, wv_V = cupy_decompose_matrix(self.wv.weight.data, target_dim=self.dim_compress)
             # Precompute (UΣ) for updating the query matrix.
             # self.wk_A = torch.mm(self.wk_U, self.wk_S)  # Matrix A = (UΣ)_{n_heads * head_dim, dim_compress}
             # self.wv_B = torch.mm(self.wv_U, self.wv_S)  # Matrix B = (UΣ)_{n_heads * head_dim, dim_compress}
             self.wk_C = torch.mm(wk_S, wk_V)  # Matrix C = (ΣV^T)_{dim_compress, n_heads * head_dim}
             self.wv_D = torch.mm(wv_S, wv_V)  # Matrix D = (ΣV^T)_{dim_compress, n_heads * head_dim}
             print('---------Decompose End----------')
-            reshaped_wv_U = wv_U.view(self.n_local_kv_heads, self.head_dim, self.dim_compress)
+            # Incorporate wv_U into wo
+            reshaped_wv_U = self.wv_U.view(self.n_local_kv_heads, self.head_dim, self.dim_compress)
             reshaped_wv_U = reshaped_wv_U.permute(0, 2, 1)  # (n_local_kv_heads, dim_compress, head_dim)
-            # repear wv_U to recover from n_kv_heads to n_heads
-            self.reshaped_wv_U = reshaped_wv_U[:, None, :, :].expand(self.n_local_kv_heads, self.n_rep, self.dim_compress, self.head_dim).reshape(self.n_local_heads, self.dim_compress, self.head_dim)
+            # repeat wv_U to recover from n_kv_heads to n_heads
+            reshaped_wv_U = reshaped_wv_U[:, None, :, :].expand(self.n_local_kv_heads, self.n_rep, self.dim_compress, self.head_dim).reshape(self.n_local_heads,self.dim_compress, self.head_dim)
+            # reshaped_wv_U = reshaped_wv_U.transpose(1, 2)  # (n_local_heads, dim_compress, head_dim)
+            wo_weight = self.wo.weight.data.transpose(1, 0).view(self.n_local_heads, self.head_dim, -1) # (n_local_heads, head_dim, dim)
+            self.combined_weights = torch.matmul(reshaped_wv_U, wo_weight) # (n_local_heads, dim_compress, dim)
+            print('----------------wo weight updated!--------------')
         else:
             print('---------Adaptive SVD Start----------')
             self.dim_compress, self.wk_U, self.wk_S, self.wk_V, self.wv_U, self.wv_S, self.wv_V= adaptive_svd_combined(self.wk.weight.data, self.wv.weight.data)
@@ -425,7 +428,7 @@ class Attention(nn.Module):
                 scores = scores + mask  # (bs, n_local_heads, seqlen, cache_len + seqlen)
             scores = F.softmax(scores.float(), dim=-1).type_as(xq)
             output = torch.matmul(scores, values)  # (bs, n_local_heads, seqlen, head_dim)
-            output = output.transpose(1, 2).contiguous().view(bsz, seqlen, -1)
+            output = output.transpose(1, 2).contiguous().view(bsz, seqlen, -1) # (bs, seqlen, model_dim)
             return self.wo(output)
         else:
             # print('------------------KVC Forward------------------')
@@ -466,12 +469,18 @@ class Attention(nn.Module):
             values = values.unsqueeze(1) # (bs, 1, cache_len + seqlen, dim_compress)
             context = torch.matmul(scores, values)  # (bs, n_local_heads, seqlen, dim_compress)
 
-            context = context.transpose(1, 2)  # (bs, seqlen, n_local_heads, dim_compress)
-            context_transformed = torch.einsum('bsjh,jhd->bsjd', context,
-                                               self.reshaped_wv_U)  # (bs, seqlen, n_local_heads, head_dim)
-            output = context_transformed.contiguous().view(bsz, seqlen, -1)  # (bs, seqlen, model_dim)
-
-            return self.wo(output) # (bs, seqlen, model_dim)
+            # reshaped_wv_U = self.wv_U.view(self.n_local_kv_heads, self.head_dim, self.dim_compress)
+            # reshaped_wv_U = reshaped_wv_U.permute(0, 2, 1)  # (n_local_kv_heads, dim_compress, head_dim)
+            # reshaped_wv_U = reshaped_wv_U[:, None, :, :].expand(self.n_local_kv_heads, self.n_rep, self.dim_compress, self.head_dim).reshape(self.n_local_heads, self.dim_compress, self.head_dim)
+            # context = context.transpose(1, 2)  # (bs, seqlen, n_local_heads, dim_compress)
+            # context_transformed = torch.einsum('bsjh,jhd->bsjd', context,
+            #                                    reshaped_wv_U)  # (bs, seqlen, n_local_heads, head_dim)
+            # output = context_transformed.contiguous().view(bsz, seqlen, -1)  # (bs, seqlen, model_dim)
+            #
+            # return self.wo(output) # (bs, seqlen, model_dim)
+            context = context.transpose(1, 2) # (bs, seqlen, n_local_heads, dim_compress)
+            output = torch.einsum('bsjh,jhd->bsd', context, self.combined_weights) # (bs, seqlen, dim)
+            return output
 
 
 class FeedForward(nn.Module):
