@@ -157,7 +157,7 @@ def numpy_decompose_matrix(matrix, target_dim):
     print('Matrix Shape:', matrix_np.shape)
 
     # Perform SVD using NumPy.
-    U_np, S_np, V_np = np.linalg.svd(matrix_np, full_matrices=True)
+    U_np, S_np, V_np = np.linalg.svd(matrix_np, full_matrices=False)
 
     # Reduce the dimensions of U, S, and V matrices as per target_dim.
     U_reduced_np = U_np[:, :target_dim]
