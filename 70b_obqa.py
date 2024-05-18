@@ -53,7 +53,7 @@ KVC_CONFIG_DICT = {
     'baseline': BASELINE,
 }
 
-DATA_SLICE = None
+DATA_SLICE = 8
 
 def create_prompts_from_data(data):
     prompts = []
