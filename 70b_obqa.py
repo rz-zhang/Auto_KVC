@@ -190,10 +190,18 @@ def main(
     filename = f"~/mycontainer/rongzhi/KVC/eval/obqa/{kvc_config}_dim_{dim_compress}_{timestamp}.json"
     # Check if the directory exists, and if not, create it
     directory = os.path.dirname(filename)
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-    with open(filename, 'w') as file:
-        json.dump(results, file, indent=4)
+    try:
+        # Create the directory, ignore if it already exists
+        os.makedirs(directory, exist_ok=True)
+        with open(filename, 'w') as file:
+            json.dump(results, file, indent=4)
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+    # if not os.path.exists(directory):
+    #     os.makedirs(directory)
+    # with open(filename, 'w') as file:
+    #     json.dump(results, file, indent=4)
 
     print(f"Results saved in {filename}")
 if __name__ == "__main__":
