@@ -42,6 +42,7 @@ MIDDLE_60_LAYERS = list(range(10, 70))
 Middle_40_LAYERS = list(range(20, 60))
 LAST_60_LAYERS = list(range(20, 80))
 BASELINE = []
+CUSTOM_LAYERS = list(range(40,75))
 
 KVC_CONFIG_DICT = {
     'all_layers': ALL_LAYERS,
@@ -51,6 +52,7 @@ KVC_CONFIG_DICT = {
     'last_60_layers': LAST_60_LAYERS,
     'middle_40_layers': Middle_40_LAYERS,
     'baseline': BASELINE,
+    'custom_layers': CUSTOM_LAYERS,
 }
 
 
@@ -93,7 +95,7 @@ def main(
     model_stats = generator.get_model_stats()
 
     dataset = load_dataset("xsum", split='test')
-    prompts, reference_summaries = create_prompts_from_data(dataset[:1000])
+    prompts, reference_summaries = create_prompts_from_data(dataset[:100])
 
 
     predictions = []
