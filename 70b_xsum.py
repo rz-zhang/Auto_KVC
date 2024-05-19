@@ -2,7 +2,7 @@
 torchrun --nproc_per_node 8 70b_xsum.py \
 --ckpt_dir Meta-Llama-3-70B-Instruct/ \
 --tokenizer_path Meta-Llama-3-70B-Instruct/tokenizer.model \
---max_seq_len 2048 --max_batch_size  --max_gen_len 256
+--max_seq_len 2048 --max_batch_size 16 --max_gen_len 256 --dim_compress 80 --kvc_config all_layers
 '''
 
 from typing import List, Optional
@@ -38,6 +38,7 @@ ALL_LAYERS = list(range(80))
 MIDDLE_60_LAYERS = list(range(10, 70))
 Middle_40_LAYERS = list(range(20, 60))
 LAST_60_LAYERS = list(range(20, 80))
+LAST_30_LAYERS = list(range(50, 80))
 BASELINE = []
 CUSTOM_LAYERS = list(range(40,75))
 
@@ -50,6 +51,7 @@ KVC_CONFIG_DICT = {
     'middle_40_layers': Middle_40_LAYERS,
     'baseline': BASELINE,
     'custom_layers': CUSTOM_LAYERS,
+    'last_30_layers': LAST_30_LAYERS,
 }
 
 
