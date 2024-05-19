@@ -35,15 +35,24 @@ CUSTOM_LAYERS = [20, 26, 18, 29, 17, 23,
     30, 22, 12, 15, 28, 14, 24, 19, 21, 25,
     10, 16, 27, 11, 31, 13, 4, 0]
 
-SECOND_HALF_LAYERS = list(range(16, 32))
-LAST_LAYERS = list(range(20, 32))
+SECOND_HALF_LAYERS = list(range(40, 80))
+LAST_20_LAYERS = list(range(60, 80))
+ALL_LAYERS = list(range(80))
+MIDDLE_60_LAYERS = list(range(10, 70))
+Middle_40_LAYERS = list(range(20, 60))
+LAST_60_LAYERS = list(range(20, 80))
 BASELINE = []
 
 KVC_CONFIG_DICT = {
+    'all_layers': ALL_LAYERS,
     'second_half': SECOND_HALF_LAYERS,
-    'last_layers': LAST_LAYERS,
+    'last_20_layers': LAST_20_LAYERS,
+    'middle_60_layers': MIDDLE_60_LAYERS,
+    'last_60_layers': LAST_60_LAYERS,
+    'middle_40_layers': Middle_40_LAYERS,
     'baseline': BASELINE,
 }
+
 
 # kv_compress_layers=LAYER_MAPPING.get(kv_compress_layers, [])
 
@@ -133,15 +142,16 @@ def main(
         filename = f"/llama3/eval/xsum_per_layer_kvc/layer_{kv_compress_layers_str}_dim_{dim_compress}_{timestamp}.json"
     #filename = f"/localscratch/rongzhi/kvcache/llama3/eval/xsum/test1k/custom_layers_rouge1_top16_{kv_compress_layers_str}_dim_{dim_compress}_{timestamp}.json"
     # filename = f"/localscratch/rongzhi/kvcache/llama3/eval/xsum/test1k/ave_dim_128_256_384_512_rouge1_top16_{kv_compress_layers_str}_dim_{dim_compress}_{timestamp}.json"
-    filename = f"./eval/xsum/test1k/{kvc_config}_layer_{kv_compress_layers_str}_dim_{dim_compress}_{timestamp}.json"
-
-    # Check if the directory exists, and if not, create it
+    #filename = f"./eval/xsum/test1k/{kvc_config}_layer_{kv_compress_layers_str}_dim_{dim_compress}_{timestamp}.json"
+    filename = f"~/mycontainer/rongzhi/KVC/eval/xsum/test1k/{kvc_config}_dim_{dim_compress}_{timestamp}.json"
     directory = os.path.dirname(filename)
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-    # filename = f"baseline_1k_test.json"
-    with open(filename, 'w') as file:
-        json.dump(results, file, indent=4)
+    try:
+        # Create the directory, ignore if it already exists
+        os.makedirs(directory, exist_ok=True)
+        with open(filename, 'w') as file:
+            json.dump(results, file, indent=4)
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
     print(f"Results saved in {filename}")
 if __name__ == "__main__":
