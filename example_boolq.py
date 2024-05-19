@@ -52,7 +52,7 @@ def main(
     kv_compress_layers: Optional[List[int]] = None,
     adaptive: bool = False,
 ):
-    kv_compress_layers = LAYER_MAPPING.get(kv_compress_layers, [])
+    kv_compress_layers = SECOND_HALF_LAYERS
     generator = Llama.build(
         ckpt_dir=ckpt_dir,
         tokenizer_path=tokenizer_path,
@@ -112,6 +112,7 @@ def main(
     filename = f"/localscratch/rongzhi/kvcache/llama3/eval/boolq_test_1k_dim_{dim_compress}_{timestamp}.json"
     filename = f"/localscratch/rongzhi/kvcache/llama3/eval/boolq/baseline_all_data_{timestamp}.json"
     filename = f"/localscratch/rongzhi/kvcache/llama3/eval/boolq/per_layer/1k_data_layer_{kv_compress_layers_str}_dim_{dim_compress}_{timestamp}.json"
+    filename = f"/localscratch/rongzhi/kvcache/llama3/eval/boolq/second_half_dim_{dim_compress}_{timestamp}.json"
     with open(filename, 'w') as file:
         json.dump(results, file, indent=4)
 
