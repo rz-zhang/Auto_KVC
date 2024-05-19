@@ -42,6 +42,7 @@ KVC_CONFIG_2 = [
 SECOND_HALF_LAYERS = list(range(40, 80))
 LAST_20_LAYERS = list(range(60, 80))
 ALL_LAYERS = list(range(80))
+MIDDLE_60_LAYERS = list(range(10, 70))
 BASELINE = []
 
 KVC_CONFIG_DICT = {
@@ -50,6 +51,7 @@ KVC_CONFIG_DICT = {
     'all_layers': ALL_LAYERS,
     'second_half': SECOND_HALF_LAYERS,
     'last_20_layers': LAST_20_LAYERS,
+    'middle_60_layers': MIDDLE_60_LAYERS,
     'baseline': BASELINE,
 }
 
