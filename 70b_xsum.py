@@ -31,9 +31,6 @@ AVE_DIM_128_256_384_512_ROUGE_1_RANK = [
     10, 7, 16, 27, 11, 31, 13, 4, 0]
 
 # Exclude layers 1-9 from AVE_DIM_128_256_384_512_ROUGE_1_RANK
-CUSTOM_LAYERS = [20, 26, 18, 29, 17, 23,
-    30, 22, 12, 15, 28, 14, 24, 19, 21, 25,
-    10, 16, 27, 11, 31, 13, 4, 0]
 
 SECOND_HALF_LAYERS = list(range(40, 80))
 LAST_20_LAYERS = list(range(60, 80))
