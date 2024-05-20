@@ -2,7 +2,7 @@
 torchrun --nproc_per_node 8 70b_xsum.py \
 --ckpt_dir Meta-Llama-3-70B-Instruct/ \
 --tokenizer_path Meta-Llama-3-70B-Instruct/tokenizer.model \
---max_seq_len 2048 --max_batch_size 16 --max_gen_len 256 --dim_compress 80 --kvc_config all_layers
+--max_seq_len 2048 --max_batch_size 24 --max_gen_len 256 --dim_compress 80 --kvc_config baseline
 '''
 
 from typing import List, Optional
