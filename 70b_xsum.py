@@ -100,7 +100,7 @@ def main(
     model_stats = generator.get_model_stats()
 
     dataset = load_dataset("xsum", split='test')
-    prompts, reference_summaries = create_prompts_from_data(dataset[:100])
+    prompts, reference_summaries = create_prompts_from_data(dataset[:48])
 
 
     predictions = []
