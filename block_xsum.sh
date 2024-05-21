@@ -9,5 +9,5 @@ for dim in {80,32,8}; do
     torchrun --nproc_per_node 8 70b_xsum.py \
     --ckpt_dir Meta-Llama-3-70B-Instruct/ \
     --tokenizer_path Meta-Llama-3-70B-Instruct/tokenizer.model \
-    --max_seq_len 2048 --max_batch_size 24 --max_gen_len 256 --dim_compress $dim --kvc_config first_20_layers
+    --max_seq_len 2048 --max_batch_size 24 --max_gen_len 256 --dim_compress $dim --kvc_config second_20_layers
 done
