@@ -45,6 +45,8 @@ ALL_LAYERS = list(range(80))
 MIDDLE_60_LAYERS = list(range(10, 70))
 Middle_40_LAYERS = list(range(20, 60))
 LAST_60_LAYERS = list(range(20, 80))
+LAYER_0 = [0]
+SHALLOW_BLOCKS = list(range(0, 10))
 BASELINE = []
 
 KVC_CONFIG_DICT = {
@@ -57,6 +59,8 @@ KVC_CONFIG_DICT = {
     'last_60_layers': LAST_60_LAYERS,
     'middle_40_layers': Middle_40_LAYERS,
     'baseline': BASELINE,
+    'layer_0': LAYER_0,
+    'shallow_blocks': SHALLOW_BLOCKS,
 }
 
 DATA_SLICE = None
