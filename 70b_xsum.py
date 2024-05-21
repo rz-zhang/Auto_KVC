@@ -39,6 +39,9 @@ MIDDLE_60_LAYERS = list(range(10, 70))
 Middle_40_LAYERS = list(range(20, 60))
 LAST_60_LAYERS = list(range(20, 80))
 LAST_30_LAYERS = list(range(50, 80))
+FIRST_20_LAYERS = list(range(20))
+SECOND_20_LAYERS = list(range(20, 40))
+THIRD_20_LAYERS = list(range(40, 60))
 BASELINE = []
 CUSTOM_LAYERS = list(range(40,75))
 
@@ -52,6 +55,9 @@ KVC_CONFIG_DICT = {
     'baseline': BASELINE,
     'custom_layers': CUSTOM_LAYERS,
     'last_30_layers': LAST_30_LAYERS,
+    'first_20_layers': FIRST_20_LAYERS,
+    'second_20_layers': SECOND_20_LAYERS,
+    'third_20_layers': THIRD_20_LAYERS,
 }
 
 

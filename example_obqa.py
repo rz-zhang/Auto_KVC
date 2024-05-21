@@ -1,8 +1,8 @@
 '''
-CUDA_VISIBLE_DEVICES=2 torchrun --nproc_per_node 1 --master_port 25688 example_obqa.py \
+CUDA_VISIBLE_DEVICES=0 torchrun --nproc_per_node 1 --master_port 25688 example_obqa.py \
     --ckpt_dir Meta-Llama-3-8B-Instruct/ \
     --tokenizer_path Meta-Llama-3-8B-Instruct/tokenizer.model \
-    --max_seq_len 512 --max_batch_size 50 --dim_compress 512
+    --max_seq_len 512 --max_batch_size 10 --dim_compress 512
 '''
 
 from typing import List, Optional
@@ -19,6 +19,8 @@ from llama import Dialog, Llama
 
 SECOND_HALF_LAYERS = list(range(16, 32))
 LAST_LAYERS = list(range(20, 32))
+LAYER_0 = [0]
+SHALLOW_BLOCKS = [0,4]
 BASELINE = []
 
 def create_prompts_from_data(data):
@@ -74,7 +76,7 @@ def main(
     kv_compress_layers: int = 0,
     adaptive: bool = False,
 ):
-    kv_compress_layers = SECOND_HALF_LAYERS
+    kv_compress_layers = SHALLOW_BLOCKS
     generator = Llama.build(
         ckpt_dir=ckpt_dir,
         tokenizer_path=tokenizer_path,
