@@ -579,10 +579,7 @@ class TransformerBlock(nn.Module):
     def svd_attention_weight(self, adaptive=False):
         # self.attention.svd_weight(adaptive=adaptive)
         wk_err, wv_err = self.attention.svd_weight(adaptive=adaptive)
-        wk_err_scalar = round(wk_err.item(), 4)
-        wv_err_scalar = round(wv_err.item(), 4)
-
-        return wk_err_scalar, wv_err_scalar
+        return wk_err.item(), wv_err.item()
 
 class Transformer(nn.Module):
     def __init__(self, params: ModelArgs, custom_kvc_config: Optional[List[int]] = None):
@@ -672,7 +669,6 @@ class Transformer(nn.Module):
                     'layer_index': i,
                     'wk_err': wk_err,
                     'wv_err': wv_err,
-                    'average_err': (wk_err + wv_err) / 2
                 })
 
         # 写入文件
