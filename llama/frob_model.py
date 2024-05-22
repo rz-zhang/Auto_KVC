@@ -579,7 +579,10 @@ class TransformerBlock(nn.Module):
     def svd_attention_weight(self, adaptive=False):
         # self.attention.svd_weight(adaptive=adaptive)
         wk_err, wv_err = self.attention.svd_weight(adaptive=adaptive)
-        return wk_err, wv_err
+        wk_err_scalar = round(wk_err.item(), 4)
+        wv_err_scalar = round(wv_err.item(), 4)
+
+        return wk_err_scalar, wv_err_scalar
 
 class Transformer(nn.Module):
     def __init__(self, params: ModelArgs, custom_kvc_config: Optional[List[int]] = None):
@@ -658,7 +661,7 @@ class Transformer(nn.Module):
     #             layer.svd_attention_weight(adaptive=adaptive)
 
     def layerwise_svd(self, adaptive=False):
-        errors = []  # 用来存储每一层的错误数据
+        errors = []
         current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")  # 获取当前时间并格式化
         filename = f'layerwise_reconstruction_errors_{current_time}.csv'  # 构建带时间戳的文件名
 
@@ -668,7 +671,8 @@ class Transformer(nn.Module):
                 errors.append({
                     'layer_index': i,
                     'wk_err': wk_err,
-                    'wv_err': wv_err
+                    'wv_err': wv_err,
+                    'average_err': (wk_err + wv_err) / 2
                 })
 
         # 写入文件
