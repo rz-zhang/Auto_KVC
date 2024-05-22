@@ -17,6 +17,7 @@ import datetime
 
 from llama import Dialog, Llama
 
+ALL_LAYERS = list(range(32))
 SECOND_HALF_LAYERS = list(range(16, 32))
 LAST_LAYERS = list(range(20, 32))
 LAYER_0 = [0]
@@ -76,7 +77,7 @@ def main(
     kv_compress_layers: int = 0,
     adaptive: bool = False,
 ):
-    kv_compress_layers = SHALLOW_BLOCKS
+    kv_compress_layers = ALL_LAYERS
     generator = Llama.build(
         ckpt_dir=ckpt_dir,
         tokenizer_path=tokenizer_path,
@@ -155,7 +156,7 @@ def main(
         filename = f"/localscratch/rongzhi/kvcache/llama3/eval/obqa_adaptive_{timestamp}.json"
     else:
         filename = f"/localscratch/rongzhi/kvcache/llama3/eval/obqa/llama-3-inst-8b-res/layer_{kv_compress_layers_str}_dim_{dim_compress}_{timestamp}.json"
-    filename = f"/localscratch/rongzhi/kvcache/llama3/eval/obqa/llama-3-inst-8b/last_16_layer_{kv_compress_layers_str}_dim_{dim_compress}_task_desc_1_shot_fact_{timestamp}.json"
+    filename = f"/localscratch/rongzhi/kvcache/llama3/eval/obqa/llama-3-inst-8b/all_layer_dim_{dim_compress}_{timestamp}.json"
     # Check if the directory exists, and if not, create it
     directory = os.path.dirname(filename)
     if not os.path.exists(directory):

@@ -1,13 +1,13 @@
 '''
-CUDA_VISIBLE_DEVICES=2 torchrun --nproc_per_node 1 --master_port 25788 gsm8k.py \
+CUDA_VISIBLE_DEVICES=0 torchrun --nproc_per_node 1 --master_port 25384 gsm8k.py \
     --ckpt_dir Meta-Llama-3-8B-Instruct/ \
     --tokenizer_path Meta-Llama-3-8B-Instruct/tokenizer.model \
-    --max_seq_len 1024 --max_batch_size 10 --dim_compress 128 --kvc_config second_half_7b
+    --max_seq_len 1024 --max_batch_size 10 --dim_compress 384 --kvc_config second_half_7b
 
 CUDA_VISIBLE_DEVICES=0,2 torchrun --nproc_per_node 2 --master_port 25333 gsm8k.py \
    --ckpt_dir /localscratch/rongzhi/kvcache/llama/llama-2-inst-8b/ \
     --tokenizer_path /localscratch/rongzhi/kvcache/llama/tokenizer.model \
-    --max_seq_len 1024 --max_batch_size 20 --dim_compress 256 --kvc_config second_half_7b
+    --max_seq_len 1024 --max_batch_size 20 --dim_compress 896 --kvc_config second_half_7b
 '''
 
 from datasets import load_dataset
@@ -83,7 +83,7 @@ def main(
     kvc_config: str = 'baseline',
     kv_compress_layers: Optional[List[int]] = None,
     adaptive: bool = False,
-    num_shot: int = 1,
+    num_shot: int = 0,
 ):
     kv_compress_layers = KVC_CONFIG_DICT[kvc_config]
     generator = Llama.build(

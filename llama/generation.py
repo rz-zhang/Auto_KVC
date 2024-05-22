@@ -18,7 +18,8 @@ from fairscale.nn.model_parallel.initialize import (
 )
 
 # from llama.model import ModelArgs, Transformer
-from llama.flex_model import ModelArgs, Transformer
+# from llama.flex_model import ModelArgs, Transformer
+from llama.frob_model import ModelArgs, Transformer
 from llama.tokenizer import ChatFormat, Dialog, Message, Tokenizer
 
 

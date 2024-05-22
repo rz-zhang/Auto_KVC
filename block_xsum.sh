@@ -5,7 +5,7 @@ trap "exit" INT
 base_port=29900
 
 # Loop through dim_compress values
-for dim in {112, 80,32,8}; do
+for dim in {112,80,32,8}; do
     torchrun --nproc_per_node 8 70b_xsum.py \
     --ckpt_dir Meta-Llama-3-70B-Instruct/ \
     --tokenizer_path Meta-Llama-3-70B-Instruct/tokenizer.model \
