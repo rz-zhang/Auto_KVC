@@ -579,6 +579,7 @@ class TransformerBlock(nn.Module):
     def svd_attention_weight(self, adaptive=False):
         # self.attention.svd_weight(adaptive=adaptive)
         wk_err, wv_err = self.attention.svd_weight(adaptive=adaptive)
+        return wk_err, wv_err
 
 class Transformer(nn.Module):
     def __init__(self, params: ModelArgs, custom_kvc_config: Optional[List[int]] = None):
