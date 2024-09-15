@@ -1,8 +1,18 @@
 '''
-CUDA_VISIBLE_DEVICES=0 torchrun --nproc_per_node 1 --master_port 25688 example_obqa.py \
+CUDA_VISIBLE_DEVICES=2 torchrun --nproc_per_node 1 --master_port 25677 example_obqa.py \
     --ckpt_dir Meta-Llama-3-8B-Instruct/ \
     --tokenizer_path Meta-Llama-3-8B-Instruct/tokenizer.model \
-    --max_seq_len 512 --max_batch_size 10 --dim_compress 512
+    --max_seq_len 3072 --max_batch_size 20 --dim_compress 512 --kvc_config baseline
+
+CUDA_VISIBLE_DEVICES=0 torchrun --nproc_per_node 1 --master_port 25777 example_obqa.py \
+    --ckpt_dir Meta-Llama-3-8B-Instruct/ \
+    --tokenizer_path Meta-Llama-3-8B-Instruct/tokenizer.model \
+    --max_seq_len 3072 --max_batch_size 20 --dim_compress 1024 --dim_compress_v 512 --kvc_config second_half_layers
+
+CUDA_VISIBLE_DEVICES=3 torchrun --nproc_per_node 1 --master_port 25677 example_obqa.py \
+--ckpt_dir Meta-Llama-3-8B-Instruct/ \
+--tokenizer_path Meta-Llama-3-8B-Instruct/tokenizer.model \
+--max_seq_len 3072 --max_batch_size 20 --dim_compress 512 --kvc_config baseline --config_file config/llama3-8b-anneal-4.txt
 '''
 
 from typing import List, Optional
@@ -19,10 +29,19 @@ from llama import Dialog, Llama
 
 ALL_LAYERS = list(range(32))
 SECOND_HALF_LAYERS = list(range(16, 32))
-LAST_LAYERS = list(range(20, 32))
+LAST_LAYERS = list(range(12, 32))
 LAYER_0 = [0]
 SHALLOW_BLOCKS = [0,4]
 BASELINE = []
+
+KVC_CONFIG_DICT = {
+    "all_layers": ALL_LAYERS,
+    "second_half_layers": SECOND_HALF_LAYERS,
+    "last_layers": LAST_LAYERS,
+    "layer_0": LAYER_0,
+    "shallow_blocks": SHALLOW_BLOCKS,
+    "baseline": BASELINE,
+}
 
 def create_prompts_from_data(data):
     prompts = []
@@ -76,8 +95,16 @@ def main(
     dim_compress: int = 1024,
     kv_compress_layers: int = 0,
     adaptive: bool = False,
+    kvc_config: str = 'baseline',
+    config_file: Optional[str] = None,
+    dim_compress_v: Optional[int] = None,
 ):
-    kv_compress_layers = ALL_LAYERS
+    if config_file is not None:
+        with open(config_file, 'r') as file:
+            custom_kvc_config = [int(line.strip()) for line in file]
+    else:
+        custom_kvc_config = None
+    kv_compress_layers = KVC_CONFIG_DICT[kvc_config]
     generator = Llama.build(
         ckpt_dir=ckpt_dir,
         tokenizer_path=tokenizer_path,
@@ -86,9 +113,12 @@ def main(
         dim_compress=dim_compress,
         kv_compress_layers=kv_compress_layers,
         adaptive=adaptive,
+        custom_kvc_config=custom_kvc_config,
+        dim_compress_v=dim_compress_v,
     )
 
     model_stats = generator.get_model_stats()
+    model_stats_seperate = generator.get_model_stats_seperate()
 
     dataset = load_dataset("allenai/openbookqa", split='test')
     prompts, correct_answers = create_prompts_from_data(dataset)
@@ -138,6 +168,7 @@ def main(
     results = {
         "accuracy": accuracy,
         "model_stats": model_stats,
+        "model_states_seperate": model_stats_seperate,
         "dim_compress": dim_compress,
         "kv_compress_layers": kv_compress_layers,
         "predictions": predictions,

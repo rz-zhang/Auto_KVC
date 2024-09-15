@@ -19,7 +19,9 @@ from fairscale.nn.model_parallel.initialize import (
 
 # from llama.model import ModelArgs, Transformer
 # from llama.flex_model import ModelArgs, Transformer
-from llama.frob_model import ModelArgs, Transformer
+from llama.seperate_compress_model import ModelArgs, Transformer
+#from llama.streamline_model import ModelArgs, Transformer
+# from llama.frob_model import ModelArgs, Transformer
 from llama.tokenizer import ChatFormat, Dialog, Message, Tokenizer
 
 
@@ -48,6 +50,7 @@ class Llama:
         dim_compress=1024,
         kv_compress_layers: List[int] = field(default_factory=list),
         custom_kvc_config: Optional[List[int]] = None,
+        dim_compress_v: Optional[int] = None,
     ) -> "Llama":
         """
         Build a Llama instance by initializing and loading a model checkpoint.
@@ -111,10 +114,12 @@ class Llama:
             torch.set_default_tensor_type(torch.cuda.BFloat16Tensor)
         else:
             torch.set_default_tensor_type(torch.cuda.HalfTensor)
-        model = Transformer(model_args, custom_kvc_config)
+        model = Transformer(model_args, custom_kvc_config, dim_compress_v)
         model.load_state_dict(checkpoint, strict=False)
         print(f"Loaded in {time.time() - start_time:.2f} seconds")
+        # model.layer_mat_analysis()
         model.layerwise_svd(adaptive=adaptive)
+
 
         return Llama(model, tokenizer)
 
@@ -350,6 +355,9 @@ class Llama:
 
     def get_model_stats(self):
         return self.model.get_model_stats()
+
+    def get_model_stats_seperate(self):
+        return self.model.get_model_stats_seperate()
 
 
 def sample_top_p(probs, p):

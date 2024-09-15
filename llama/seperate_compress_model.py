@@ -38,6 +38,7 @@ class ModelArgs:
 
     # do_kv_compress: bool = False
     dim_compress: int = 1024
+    dim_compress_v: int = 1024
     kv_compress_layers: List[int] = field(default_factory=list)
 
 
@@ -283,9 +284,11 @@ def adaptive_svd_combined(key_matrix, value_matrix, key_error_threshold=0.1, val
     return optimal_dim, U_k_reduced.type(key_matrix.dtype), S_k_reduced_diag.type(key_matrix.dtype), V_k_reduced.type(key_matrix.dtype), \
            U_v_reduced.type(value_matrix.dtype), S_v_reduced_diag.type(value_matrix.dtype), V_v_reduced.type(value_matrix.dtype)
 
+def print_grad(grad):
+    print("Gradient for wk:", grad)
 
 class Attention(nn.Module):
-    def __init__(self, args: ModelArgs, do_kv_compress: bool = False, dim_compress: int = 1024):
+    def __init__(self, args: ModelArgs, do_kv_compress: bool = False, dim_compress: int = 1024, dim_compress_v: Optional[int] = None):
         super().__init__()
         self.max_batch_size = args.max_batch_size
         self.max_seq_len = args.max_seq_len
@@ -297,6 +300,10 @@ class Attention(nn.Module):
         self.head_dim = args.dim // args.n_heads
 
         self.dim_compress = dim_compress
+        if dim_compress_v is not None:
+            self.dim_compress_v = dim_compress_v
+        else:
+            self.dim_compress_v = dim_compress
         self.do_kv_compress = do_kv_compress
 
         self.wq = ColumnParallelLinear(
@@ -329,10 +336,12 @@ class Attention(nn.Module):
         )
 
         self.initialize_caches()  # Initialize with full dimension if not compressing
+        self.wk.weight.register_hook(print_grad) # Register hook to print gradients
 
     def initialize_caches(self):
         """Initialize caches with default dimension settings."""
         if not self.do_kv_compress:
+            print('Original Cache initialized!')
             self.cache_k = torch.zeros(
                 (
                     self.max_batch_size,
@@ -349,7 +358,12 @@ class Attention(nn.Module):
                     self.head_dim,
                 )
             ).cuda()
+            print(
+                f"Original cache_k memory: {self.cache_k.element_size() * self.cache_k.nelement() / (1024 ** 2):.2f} MB")
+            print(
+                f"Original cache_v memory: {self.cache_v.element_size() * self.cache_v.nelement() / (1024 ** 2):.2f} MB")
         else:
+            print('Compressed KV Cache initialized!')
             self.cache_k = torch.zeros(
                 (
                     self.max_batch_size,
@@ -361,9 +375,13 @@ class Attention(nn.Module):
                 (
                     self.max_batch_size,
                     self.max_seq_len,
-                    self.dim_compress
+                    self.dim_compress_v
                 )
             ).cuda()
+            print(
+                f"Compressed cache_k memory: {self.cache_k.element_size() * self.cache_k.nelement() / (1024 ** 2):.2f} MB")
+            print(
+                f"Compressed cache_v memory: {self.cache_v.element_size() * self.cache_v.nelement() / (1024 ** 2):.2f} MB")
 
     def update_cache_sizes(self):
         """Update cache sizes after adaptive SVD has determined new dimensions."""
@@ -379,7 +397,7 @@ class Attention(nn.Module):
                 (
                     self.max_batch_size,
                     self.max_seq_len,
-                    self.dim_compress
+                    self.dim_compress_v
                 )
             ).cuda()
 
@@ -392,22 +410,23 @@ class Attention(nn.Module):
             self.wk_U, wk_S, wk_V, wk_err = numpy_decompose_matrix(self.wk.weight.data, target_dim=self.dim_compress)
             # wk_U (n_heads * head_dim, dim_compress), wk_S (dim_compress, dim_compress)
             # wk_V (n_heads * head_dim, dim_compress), we need to transpose it manually
-            self.wv_U, wv_S, wv_V, wv_err = numpy_decompose_matrix(self.wv.weight.data, target_dim=self.dim_compress)
+            self.wv_U, wv_S, wv_V, wv_err = numpy_decompose_matrix(self.wv.weight.data, target_dim=self.dim_compress_v)
             # Precompute (UΣ) for updating the query matrix.
             # self.wk_A = torch.mm(self.wk_U, self.wk_S)  # Matrix A = (UΣ)_{n_heads * head_dim, dim_compress}
             # self.wv_B = torch.mm(self.wv_U, self.wv_S)  # Matrix B = (UΣ)_{n_heads * head_dim, dim_compress}
             self.wk_C = torch.mm(wk_S, wk_V)  # Matrix C = (ΣV^T)_{dim_compress, n_heads * head_dim}
             self.wv_D = torch.mm(wv_S, wv_V)  # Matrix D = (ΣV^T)_{dim_compress, n_heads * head_dim}
             print('---------Decompose End----------')
-            # Incorporate wv_U into wo
-            reshaped_wv_U = self.wv_U.view(self.n_local_kv_heads, self.head_dim, self.dim_compress)
-            reshaped_wv_U = reshaped_wv_U.permute(0, 2, 1)  # (n_local_kv_heads, dim_compress, head_dim)
-            # repeat wv_U to recover from n_kv_heads to n_heads
-            reshaped_wv_U = reshaped_wv_U[:, None, :, :].expand(self.n_local_kv_heads, self.n_rep, self.dim_compress, self.head_dim).reshape(self.n_local_heads,self.dim_compress, self.head_dim)
-            # reshaped_wv_U = reshaped_wv_U.transpose(1, 2)  # (n_local_heads, dim_compress, head_dim)
-            wo_weight = self.wo.weight.data.transpose(1, 0).view(self.n_local_heads, self.head_dim, -1) # (n_local_heads, head_dim, dim)
-            self.combined_weights = torch.matmul(reshaped_wv_U, wo_weight) # (n_local_heads, dim_compress, dim)
-            print('----------------wo weight updated!--------------')
+            # Move this part into the forward function to save memory
+            # # Incorporate wv_U into wo
+            # reshaped_wv_U = self.wv_U.view(self.n_local_kv_heads, self.head_dim, self.dim_compress)
+            # reshaped_wv_U = reshaped_wv_U.permute(0, 2, 1)  # (n_local_kv_heads, dim_compress, head_dim)
+            # # repeat wv_U to recover from n_kv_heads to n_heads
+            # reshaped_wv_U = reshaped_wv_U[:, None, :, :].expand(self.n_local_kv_heads, self.n_rep, self.dim_compress, self.head_dim).reshape(self.n_local_heads,self.dim_compress, self.head_dim)
+            # # reshaped_wv_U = reshaped_wv_U.transpose(1, 2)  # (n_local_heads, dim_compress, head_dim)
+            # wo_weight = self.wo.weight.data.transpose(1, 0).view(self.n_local_heads, self.head_dim, -1) # (n_local_heads, head_dim, dim)
+            # self.combined_weights = torch.matmul(reshaped_wv_U, wo_weight) # (n_local_heads, dim_compress, dim)
+            # print('----------------wo weight updated!--------------')
             return wk_err, wv_err
         else:
             print('---------Adaptive SVD Start----------')
@@ -500,7 +519,7 @@ class Attention(nn.Module):
             scores = torch.matmul(xq, keys.transpose(2,3)) / math.sqrt(self.head_dim) # (bs, n_local_heads, seqlen, cache_len + seqlen)
             if mask is not None:
                 scores += mask  # Apply mask if provided
-            scores = F.softmax(scores.float(), dim=-1).type_as(xq)
+            scores = F.softmax(scores.float(), dim=-1).type_as(xq) # (bs, n_local_heads, seqlen, cache_len + seqlen)
             values = values.unsqueeze(1) # (bs, 1, cache_len + seqlen, dim_compress)
             context = torch.matmul(scores, values)  # (bs, n_local_heads, seqlen, dim_compress)
 
@@ -514,8 +533,58 @@ class Attention(nn.Module):
             #
             # return self.wo(output) # (bs, seqlen, model_dim)
             context = context.transpose(1, 2) # (bs, seqlen, n_local_heads, dim_compress)
-            output = torch.einsum('bsjh,jhd->bsd', context, self.combined_weights) # (bs, seqlen, dim)
+            # Compute output without saving combined weights
+            reshaped_wv_U = self.wv_U.view(self.n_local_kv_heads, self.head_dim, self.dim_compress_v)
+            reshaped_wv_U = reshaped_wv_U.permute(0, 2, 1)  # (n_local_kv_heads, dim_compress, head_dim)
+            reshaped_wv_U = reshaped_wv_U[:, None, :, :].expand(self.n_local_kv_heads, self.n_rep, self.dim_compress_v,
+                                                                self.head_dim).reshape(self.n_local_heads,
+                                                                                       self.dim_compress_v, self.head_dim)
+            wo_weight = self.wo.weight.data.transpose(1, 0).view(self.n_local_heads, self.head_dim, -1)
+            combined_weights = torch.matmul(reshaped_wv_U, wo_weight)  # (n_local_heads, dim_compress, dim)
+
+            # output = torch.einsum('bsnh,nhd,hdk->bsk', context, reshaped_wv_U, wo_weight)
+
+            output = torch.einsum('bsjh,jhd->bsd', context, combined_weights) # (bs, seqlen, dim)
             return output
+
+    def mat_util_cond_wk(self):
+        tensor_as_float = self.wk.weight.data.to(dtype=torch.float32).cpu().numpy()
+        cond_number = np.linalg.cond(tensor_as_float)
+        print("Condition number of w_k:", cond_number)
+        return cond_number
+        # eigenvalues = np.linalg.eigvals(tensor_as_float.T @ tensor_as_float)
+        # print("Eigenvalues:", eigenvalues)
+        # positive_eigenvalues = eigenvalues[eigenvalues > 1e-10]
+        # print("Positive Eigenvalues:", positive_eigenvalues)
+        #
+        # if positive_eigenvalues.size > 0:
+        #     normalized_eigenvalues = positive_eigenvalues / np.sum(positive_eigenvalues)
+        #     print("Normalized Eigenvalues:", normalized_eigenvalues)
+        #
+        #     entropy = -np.sum(normalized_eigenvalues * np.log(normalized_eigenvalues))
+        #     print("Entropy of the eigenvalue distribution:", entropy)
+        # else:
+        #     print("No positive eigenvalues found. Entropy calculation cannot proceed.")
+
+    def mat_util_cond_wv(self):
+        tensor_as_float = self.wv.weight.data.to(dtype=torch.float32).cpu().numpy()
+        cond_number = np.linalg.cond(tensor_as_float)
+        print("Condition number of w_k:", cond_number)
+        return cond_number
+
+    def mat_util_grad(self):
+        self.wk.weight.data.requires_grad = True
+        self.wv.weight.data.requires_grad = True
+        self.wo.weight.data.requires_grad = True
+        x = torch.randn(1, 1024, 1024).cuda()
+        y = torch.randn(1, 1024, 1024).cuda()
+        z = torch.randn(1, 1024, 1024).cuda()
+        out = self.forward(x, 0, self.freqs_cis, self.freqs_cis, None)
+        loss = torch.nn.functional.mse_loss(out, y)
+        loss.backward()
+        print("Grad of wk:", self.wk.weight.grad)
+        print("Grad of wv:", self.wv.weight.grad)
+        print("Grad of wo:", self.wo.weight.grad)
 
 
 class FeedForward(nn.Module):
@@ -548,12 +617,12 @@ class FeedForward(nn.Module):
 
 
 class TransformerBlock(nn.Module):
-    def __init__(self, layer_id: int, args: ModelArgs, do_kv_compress: bool = False, dim_compress: int = 1024):
+    def __init__(self, layer_id: int, args: ModelArgs, do_kv_compress: bool = False, dim_compress: int = 1024, dim_compress_v: Optional[int] = None):
         super().__init__()
         self.n_heads = args.n_heads
         self.dim = args.dim
         self.head_dim = args.dim // args.n_heads
-        self.attention = Attention(args, do_kv_compress, dim_compress)
+        self.attention = Attention(args, do_kv_compress, dim_compress, dim_compress_v)
         self.feed_forward = FeedForward(
             dim=args.dim,
             hidden_dim=4 * args.dim,
@@ -582,7 +651,7 @@ class TransformerBlock(nn.Module):
         return wk_err.item(), wv_err.item()
 
 class Transformer(nn.Module):
-    def __init__(self, params: ModelArgs, custom_kvc_config: Optional[List[int]] = None):
+    def __init__(self, params: ModelArgs, custom_kvc_config: Optional[List[int]] = None, dim_compress_v: Optional[int] = None):
         super().__init__()
         self.params = params
         self.vocab_size = params.vocab_size
@@ -600,17 +669,20 @@ class Transformer(nn.Module):
         if custom_kvc_config:
             assert len(custom_kvc_config) == params.n_layers
             self.kvc_config = custom_kvc_config
+            self.kvc_config_v = custom_kvc_config
             self.kv_compress_layers = [layer_id for layer_id, dim_compress in enumerate(custom_kvc_config) if dim_compress < params.dim//(params.n_heads//params.n_kv_heads)]
             print('KVC Config:', self.kvc_config)
             print('To be compressed layers:', self.kv_compress_layers)
         else:
             self.kvc_config = [params.dim//(params.n_heads//params.n_kv_heads) for _ in range(params.n_layers)]
+            self.kvc_config_v = [params.dim//(params.n_heads//params.n_kv_heads) for _ in range(params.n_layers)]
             for layer_id in self.kv_compress_layers:
                 self.kvc_config[layer_id] = params.dim_compress
+                self.kvc_config_v[layer_id] = dim_compress_v
 
         for layer_id in tqdm(range(params.n_layers), desc="Building Transformer Blocks"):
             do_kv_compress = layer_id in self.kv_compress_layers
-            self.layers.append(TransformerBlock(layer_id, params, do_kv_compress=do_kv_compress, dim_compress=self.kvc_config[layer_id]))
+            self.layers.append(TransformerBlock(layer_id, params, do_kv_compress=do_kv_compress, dim_compress=self.kvc_config[layer_id], dim_compress_v=self.kvc_config_v[layer_id]))
 
         self.norm = RMSNorm(params.dim, eps=params.norm_eps)
         self.output = ColumnParallelLinear(
@@ -648,7 +720,7 @@ class Transformer(nn.Module):
         for layer in self.layers:
             h = layer(h, start_pos, cur_freqs_cis, entire_freqs_cis, mask)
         h = self.norm(h)
-        output = self.output(h).float()
+        output = self.output(h).float() # (bs, seqlen, vocab_size)
         return output
 
     # def layerwise_svd(self, adaptive=False):
@@ -671,15 +743,14 @@ class Transformer(nn.Module):
                     'wv_err': wv_err,
                 })
 
-        # 写入文件
-        with open(filename, 'w', newline='') as file:
-            fieldnames = ['layer_index', 'wk_err', 'wv_err']
-            writer = csv.DictWriter(file, fieldnames=fieldnames)
-            writer.writeheader()
-            for error in errors:
-                writer.writerow(error)
-
-        print(f"Errors were saved to '{filename}'")
+        # with open(filename, 'w', newline='') as file:
+        #     fieldnames = ['layer_index', 'wk_err', 'wv_err']
+        #     writer = csv.DictWriter(file, fieldnames=fieldnames)
+        #     writer.writeheader()
+        #     for error in errors:
+        #         writer.writerow(error)
+        #
+        # print(f"Errors were saved to '{filename}'")
         # sys.exit(0)
 
     def get_layerwise_dim_compress(self):
@@ -694,6 +765,68 @@ class Transformer(nn.Module):
             "layerwise_dim_compress": layerwise_dim_compress,
             "compression_ratio": compression_ratio
         }
+        print(ret_dict)
         return ret_dict
 
+    def get_layerwise_dim_compress_seperate(self):
+        return [(layer.attention.dim_compress, layer.attention.dim_compress_v) for layer in self.layers]
 
+    def get_model_stats_seperate(self):
+        layerwise_dim_compress = self.get_layerwise_dim_compress_seperate()
+
+        compression_ratio_k = [dim_compress_k / 1024 for dim_compress_k, _ in layerwise_dim_compress]
+        compression_ratio_v = [dim_compress_v / 1024 for _, dim_compress_v in layerwise_dim_compress]
+
+        overall_compression_ratio_k = np.mean(compression_ratio_k)
+        overall_compression_ratio_v = np.mean(compression_ratio_v)
+
+        ret_dict = {
+            "overall_compression_ratio_k": overall_compression_ratio_k,
+            "overall_compression_ratio_v": overall_compression_ratio_v,
+            "layerwise_dim_compress_k": [dim_compress_k for dim_compress_k, _ in layerwise_dim_compress],
+            "layerwise_dim_compress_v": [dim_compress_v for _, dim_compress_v in layerwise_dim_compress],
+            "compression_ratio_k": compression_ratio_k,
+            "compression_ratio_v": compression_ratio_v
+        }
+
+        print(ret_dict)
+        return ret_dict
+
+    def layer_mat_analysis(self):
+        layer_wise_cond_num_wk, layer_wise_cond_num_wv = [], []
+        layer_wise_ratio = []
+        for i, layer in enumerate(self.layers):
+            print(f'Layer {i}:')
+            cond_num_wk = layer.attention.mat_util_cond_wk()
+            layer_wise_cond_num_wk.append(cond_num_wk)
+            cond_num_wv = layer.attention.mat_util_cond_wv()
+            layer_wise_cond_num_wv.append(cond_num_wv)
+
+            # compress_ratio = condition_num_to_ratio(cond_num_wk)
+            # layer_wise_ratio.append(compress_ratio)
+            # layer.attention.mat_util_grad()
+
+        filename = './config/llama3-8b-cond-num.csv'
+        with open(filename, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(['Layer Index', 'Condition Number', 'Compression Ratio'])
+            for i, (cond_num_wk, cond_num_wv) in enumerate(zip(layer_wise_cond_num_wk, layer_wise_cond_num_wv)):
+                writer.writerow([i, cond_num_wk, cond_num_wv])
+        # with open(filename, 'w') as file:
+        #     for ratio in layer_wise_ratio:
+        #         compress_dim = int(1024 * ratio)
+        #         file.write(f"{compress_dim}\n")
+        print(f"Cond num have been saved to {filename}")
+        # return layer_wise_cond_num, layer_wise_ratio
+
+
+def condition_num_to_ratio(condition_number, min_ratio=0.1, max_ratio=1.0):
+    log_condition = np.log(condition_number)
+
+    # 条件数越大，减去的值越小，压缩率越接近 max_ratio
+    ratio = max_ratio - (np.log(1000) - log_condition) / (np.log(1000) - np.log(10)) * (max_ratio - min_ratio)
+
+    # 确保压缩率在指定范围内
+    clip_ratio = float(np.clip(ratio, min_ratio, max_ratio))
+    print(clip_ratio)
+    return clip_ratio
